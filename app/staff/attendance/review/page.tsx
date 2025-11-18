@@ -9,19 +9,23 @@ type Status = "present" | "absent";
 
 interface Student {
     _id: string;
-    first_name?: string;
-    roll_no?: string;
+    name?: string;
+    rollNo?: string;
 }
 
 interface AttendanceRecord {
     studentId: string;
     status: Status;
+    rollNo?: string; // <--- ADD THIS
+    name?: string;   // <--- ADD THIS
 }
-
 interface ReviewPayload {
     date?: string;
     periodInfo?: { period: string; className: string } | null;
     staff?: { _id?: string; name?: string } | null;
+    // Add these two lines:
+    courseId?: string;
+    subjectId?: string;
     students: Student[];
     attendance: AttendanceRecord[];
 }
@@ -97,24 +101,38 @@ export default function AttendanceReviewPage() {
     const goBack = () => router.push("/staff/attendance");
 
     const confirmAndSubmit = async () => {
-        if (!payload || !payload.staff?._id) {
-            alert("Missing session/staff info.");
+        if (!payload || !payload.staff?._id || !payload.courseId || !payload.subjectId) {
+            alert("Missing session, staff, course, or subject info.");
             return;
         }
+
         setSending(true);
         setError(null);
         try {
             const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+
+            // === FIX STARTS HERE ===
+            // Extract the number from "Hour 1" -> 1
+            const periodString = payload.periodInfo?.period || "1";
+            // This regex removes non-digits (e.g. "Hour ") and parses the number
+            const periodNumber = parseInt(periodString.replace(/\D/g, '')) || 1;
+            // =======================
+
             const postBody = {
                 date: payload.date,
-                period: payload.periodInfo?.period ?? "Hour 1",
+                period: periodNumber, // <--- Send the Number, not the String
                 staffId: payload.staff._id,
                 records: payload.attendance,
+                courseId: payload.courseId,
+                subjectId: payload.subjectId
             };
+
+            console.log(postBody)
             const res = await axios.post(`${API}/attendance`, postBody, { withCredentials: true });
+
             sessionStorage.removeItem("attendance_review");
             alert(res.data?.message ?? "Attendance submitted");
-            router.push("/");
+            router.push("/staff/dashboard");
         } catch (e) {
             console.error("Submit failed", e);
             setError((e as any)?.response?.data?.message ?? (e as Error).message ?? "Submit failed");
@@ -201,8 +219,8 @@ export default function AttendanceReviewPage() {
                                 .filter((a) => a.status === "absent")
                                 .map(({ studentId }) => {
                                     const student = studentMap.get(studentId);
-                                    const name = student?.first_name ?? "Student";
-                                    const roll = student?.roll_no ?? studentId;
+                                    const name = student?.name ?? "Student";
+                                    const roll = student?.rollNo ?? studentId;
                                     const status = "absent";
                                     return (
                                         <button
