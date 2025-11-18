@@ -7,8 +7,8 @@ import axios from "axios";
 
 interface Student {
     _id: string;
-    first_name: string;
-    roll_no: string;
+    name: string;
+    rollNo: string;
 }
 
 type Status = "present" | "absent";
@@ -16,6 +16,8 @@ type Status = "present" | "absent";
 interface AttendanceRecord {
     studentId: string;
     status: Status;
+    rollNo: string; // <--- ADD THIS
+    name: string;   // <--- ADD THIS
 }
 
 export default function AttendancePage() {
@@ -26,15 +28,29 @@ export default function AttendancePage() {
     const [staff, setStaff] = useState<any>(null);
     const [date, setDate] = useState("");
     const [periodInfo, setPeriodInfo] = useState<{ period: string; className: string } | null>(null);
-
+    const [courseId, setCourseId] = useState<string>("");
+    const [subjectId, setSubjectId] = useState<string>("");
     useEffect(() => {
         setDate(new Date().toISOString().split("T")[0]);
     }, []);
 
     useEffect(() => {
-        if (typeof window === "undefined") return;
-        const raw = localStorage.getItem("user");
-        if (raw) setStaff(JSON.parse(raw));
+        const fetchStaff = async () => {
+            try {
+                console.log("is this working")
+                const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+
+                const res = await axios.get(`${API}/auth/me`, {
+                    withCredentials: true,
+                });
+                console.log(res)
+                setStaff(res.data.user);
+            } catch (err) {
+                console.error("Not authenticated", err);
+            }
+        };
+        console.log("this is staff data", staff)
+        fetchStaff();
     }, []);
 
     useEffect(() => {
@@ -44,37 +60,44 @@ export default function AttendancePage() {
             setLoading(true);
             try {
                 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-                const params: any = { period: 1, date };
+
+                const periodNum = 5;
+
                 const res = await axios.get(`${API}/attendance/session`, {
-                    params,
-                    withCredentials: true, // IMPORTANT to send cookie
+                    params: {
+                        period: periodNum,
+                        date,
+                        staffId: staff?.userId || staff?._id, // optional fallback
+                    },
+                    withCredentials: true,
                 });
 
-                // where you handle sessionRes
+                console.log(JSON.stringify(res));
                 const { students: st, courseId, courseName, semester } = res.data;
-                const courseLabel = courseName;
-                setPeriodInfo({ className: `${courseLabel} - Semester ${semester}`, period: `Hour ${params.period}` });
+
+                setPeriodInfo({
+                    className: `${courseName ?? "Course"} - Semester ${semester ?? "?"}`,
+                    period: `Hour ${periodNum}`,
+                });
 
                 setStudents(st);
-                setAttendance(st.map((s: Student) => ({ studentId: s._id, status: "present" as Status })));
+                setAttendance(st.map(s => ({
+                    studentId: s._id,
+                    status: "present",
+                    rollNo: s.rollNo, // <--- Map this from student
+                    name: s.name      // <--- Map this from student
+                })));
+                setCourseId(res.data.courseId);
+                setSubjectId(res.data.subjectId);
             } catch (err) {
-                console.warn("fetch failed, falling back to mock", err);
-                // fallback: create some mock if needed
-                const mock: Student[] = Array.from({ length: 12 }).map((_, i) => ({
-                    _id: `m${i + 1}`,
-                    first_name: `Student ${i + 1}`,
-                    roll_no: `R${100 + i + 1}`,
-                }));
-                setPeriodInfo({ className: "B.Sc Computer Science - A", period: "Hour 1" });
-                setStudents(mock);
-                setAttendance(mock.map((s) => ({ studentId: s._id, status: "present" })));
+                console.log("Error loading attendance:", err);
             } finally {
                 setLoading(false);
             }
         };
 
         fetchClass();
-    }, [staff]);
+    }, [staff, date]);
 
     const toggleStatus = (studentId: string) => {
         setAttendance((prev) =>
@@ -98,20 +121,47 @@ export default function AttendancePage() {
     const router = useRouter();
     const counts = getCounts();
     const submitToReview = () => {
-        // save minimal payload to sessionStorage for the review page
+        // 1. DEBUG LOGS: Check if we actually have the IDs before sending
+        console.group("🚀 Submitting to Review");
+        console.log("Current State:");
+        console.log(" - Date:", date);
+        console.log(" - Staff:", staff);
+        console.log(" - Course ID:", courseId);
+        console.log(" - Subject ID:", subjectId);
+
+        // 2. VALIDATION: Stop immediately if data is missing
+        if (!courseId || !subjectId) {
+            console.error("❌ STOP: CourseID or SubjectID is missing. Cannot proceed.");
+            console.groupEnd();
+            alert(`Error: Missing Class Data.\nCourseID: ${courseId}\nSubjectID: ${subjectId}\n\nPlease refresh the page and try again.`);
+            return;
+        }
+
+        // 3. CONSTRUCT PAYLOAD: Ensure IDs are included
         const payload = {
             date,
             periodInfo,
             staff,
             students,
             attendance,
+            courseId: courseId, // <--- CRITICAL: Must be here
+            subjectId: subjectId // <--- CRITICAL: Must be here
         };
+
+        console.log("✅ Payload constructed:", payload);
+
         try {
+            // 4. STORAGE: Save to session
             sessionStorage.setItem("attendance_review", JSON.stringify(payload));
+            console.log("💾 Saved to SessionStorage. Navigating...");
+            console.groupEnd();
+
+            // 5. NAVIGATION
             router.push("/staff/attendance/review");
         } catch (e) {
-            console.error("Failed to save review payload", e);
-            alert("Unable to open review. Try again.");
+            console.error("❌ Failed to save review payload:", e);
+            console.groupEnd();
+            alert("System Error: Unable to save attendance data. Please try again.");
         }
     };
 
@@ -169,10 +219,10 @@ export default function AttendancePage() {
                                         className={`flex flex-col items-center justify-center px-4 py-2 rounded-lg ${pillStyle(
                                             status
                                         )} text-sm font-medium transition-transform active:scale-95`}
-                                        title={`${s.first_name} — ${status}`}
+                                        title={`${s.name} — ${status}`}
                                     >
-                                        <div className="text-sm font-semibold leading-tight">{s.roll_no}</div>
-                                        <div className="text-[11px] text-gray-500 leading-tight">{s.first_name}</div>
+                                        <div className="text-sm font-semibold leading-tight">{s.rollNo}</div>
+                                        <div className="text-[11px] text-gray-500 leading-tight">{s.name}</div>
                                     </button>
                                 );
                             })}
