@@ -16,8 +16,8 @@ type Status = "present" | "absent";
 interface AttendanceRecord {
     studentId: string;
     status: Status;
-    rollNo: string; // <--- ADD THIS
-    name: string;   // <--- ADD THIS
+    rollNo: string;
+    name: string;
 }
 
 export default function AttendancePage() {
@@ -30,6 +30,7 @@ export default function AttendancePage() {
     const [periodInfo, setPeriodInfo] = useState<{ period: string; className: string } | null>(null);
     const [courseId, setCourseId] = useState<string>("");
     const [subjectId, setSubjectId] = useState<string>("");
+
     useEffect(() => {
         setDate(new Date().toISOString().split("T")[0]);
     }, []);
@@ -61,13 +62,13 @@ export default function AttendancePage() {
             try {
                 const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
-                const periodNum = 5;
+                const periodNum = 4;
 
                 const res = await axios.get(`${API}/attendance/session`, {
                     params: {
                         period: periodNum,
                         date,
-                        staffId: staff?.userId || staff?._id, // optional fallback
+                        staffId: staff?.userId || staff?._id,
                     },
                     withCredentials: true,
                 });
@@ -84,8 +85,8 @@ export default function AttendancePage() {
                 setAttendance(st.map(s => ({
                     studentId: s._id,
                     status: "present",
-                    rollNo: s.rollNo, // <--- Map this from student
-                    name: s.name      // <--- Map this from student
+                    rollNo: s.rollNo,
+                    name: s.name
                 })));
                 setCourseId(res.data.courseId);
                 setSubjectId(res.data.subjectId);
@@ -105,7 +106,6 @@ export default function AttendancePage() {
         );
     };
 
-    // helper to set all present/absent
     const setAll = (status: Status) => {
         setAttendance(prev => prev.map(p => ({ ...p, status })));
     };
@@ -118,10 +118,11 @@ export default function AttendancePage() {
             },
             { present: 0, absent: 0 } as Record<string, number>
         );
+
     const router = useRouter();
     const counts = getCounts();
+
     const submitToReview = () => {
-        // 1. DEBUG LOGS: Check if we actually have the IDs before sending
         console.group("🚀 Submitting to Review");
         console.log("Current State:");
         console.log(" - Date:", date);
@@ -129,7 +130,6 @@ export default function AttendancePage() {
         console.log(" - Course ID:", courseId);
         console.log(" - Subject ID:", subjectId);
 
-        // 2. VALIDATION: Stop immediately if data is missing
         if (!courseId || !subjectId) {
             console.error("❌ STOP: CourseID or SubjectID is missing. Cannot proceed.");
             console.groupEnd();
@@ -137,26 +137,22 @@ export default function AttendancePage() {
             return;
         }
 
-        // 3. CONSTRUCT PAYLOAD: Ensure IDs are included
         const payload = {
             date,
             periodInfo,
             staff,
             students,
             attendance,
-            courseId: courseId, // <--- CRITICAL: Must be here
-            subjectId: subjectId // <--- CRITICAL: Must be here
+            courseId: courseId,
+            subjectId: subjectId
         };
 
         console.log("✅ Payload constructed:", payload);
 
         try {
-            // 4. STORAGE: Save to session
             sessionStorage.setItem("attendance_review", JSON.stringify(payload));
             console.log("💾 Saved to SessionStorage. Navigating...");
             console.groupEnd();
-
-            // 5. NAVIGATION
             router.push("/staff/attendance/review");
         } catch (e) {
             console.error("❌ Failed to save review payload:", e);
@@ -167,12 +163,12 @@ export default function AttendancePage() {
 
     const pillStyle = (status: Status) =>
         status === "present"
-            ? "bg-white border border-gray-200 text-[#2e798c] shadow-sm"
-            : "bg-red-500/20 border border-red-200 text-red-800 shadow-inner";
+            ? "bg-white border border-gray-200 text-[#2e798c] shadow-sm hover:shadow-md transition-all"
+            : "bg-red-500/20 border border-red-200 text-red-800 shadow-inner hover:bg-red-500/30 transition-all";
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-linear-to-br from-gray-50 to-blue-50 flex items-center justify-center p-6">
+            <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex items-center justify-center p-6">
                 <div className="text-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4" />
                     <p className="text-gray-600">Loading class & students…</p>
@@ -182,9 +178,128 @@ export default function AttendancePage() {
     }
 
     return (
-        <div className="min-h-screen bg-linear-to-br from-gray-50 to-blue-50 py-8 px-4 sm:px-6 lg:px-8">
-            <div className="max-w-md mx-auto pb-10"> {/* pb-32 to leave space for fixed bar */}
-                {/* phone-like container */}
+        <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 py-8 px-4 sm:px-6 lg:px-8">
+            {/* Desktop Container */}
+            <div className="max-w-7xl mx-auto hidden lg:block">
+                <div className="bg-white rounded-3xl shadow-lg border border-gray-200 p-8">
+                    {/* Desktop Header */}
+                    <div className="flex items-center justify-between mb-8">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center border border-gray-100 shadow-sm">
+                                <Image src="/logo.png" width={40} height={40} alt="crest" />
+                            </div>
+                            <div>
+                                <h1 className="text-2xl font-bold text-gray-900">Attendance</h1>
+                                <p className="text-gray-600">{new Date(date).toLocaleDateString('en-US', {
+                                    weekday: 'long',
+                                    year: 'numeric',
+                                    month: 'long',
+                                    day: 'numeric'
+                                })}</p>
+                            </div>
+                        </div>
+
+                        {/* Desktop Class Info */}
+                        <div className="text-right">
+                            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 min-w-64">
+                                <div className="text-sm text-blue-600 font-medium">Class Information</div>
+                                <div className="text-lg font-bold text-gray-900 mt-1">{periodInfo?.className}</div>
+                                <div className="text-sm text-blue-700 mt-1">{periodInfo?.period}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Desktop Students Grid */}
+                    <div className="mb-8">
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-xl font-semibold text-gray-900">Students ({students.length})</h2>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setAll("present")}
+                                    className="px-4 py-2 rounded-lg bg-green-500 text-white text-sm font-medium hover:bg-green-600 transition-colors shadow-sm"
+                                >
+                                    Mark All Present
+                                </button>
+                                <button
+                                    onClick={() => setAll("absent")}
+                                    className="px-4 py-2 rounded-lg bg-red-500 text-white text-sm font-medium hover:bg-red-600 transition-colors shadow-sm"
+                                >
+                                    Mark All Absent
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+                            {students.map((s) => {
+                                const rec = attendance.find((a) => a.studentId === s._id);
+                                const status = rec?.status ?? "present";
+                                return (
+                                    <button
+                                        key={s._id}
+                                        onClick={() => toggleStatus(s._id)}
+                                        className={`flex items-center gap-4 p-4 rounded-xl ${pillStyle(status)} text-left transition-all duration-200 hover:scale-105`}
+                                    >
+                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${status === "present" ? "bg-green-500" : "bg-red-500"
+                                            }`}>
+                                            {/* {s.rollNo} */} {s.name.split("")[0]}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="font-semibold text-gray-900 truncate">{s.name}</div>
+                                            <div className="text-sm text-gray-500">Roll No: {s.rollNo}</div>
+                                        </div>
+                                        <div className={`px-3 py-1 rounded-full text-xs font-medium ${status === "present"
+                                            ? "bg-green-100 text-green-800"
+                                            : "bg-red-100 text-red-800"
+                                            }`}>
+                                            {status === "present" ? "Present" : "Absent"}
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* Desktop Footer */}
+                    <div className="border-t border-gray-200 pt-6">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-8">
+                                <div className="text-center">
+                                    <div className="text-2xl font-bold text-green-600">{counts.present}</div>
+                                    <div className="text-sm text-gray-600">Present</div>
+                                </div>
+                                <div className="w-px h-12 bg-gray-200" />
+                                <div className="text-center">
+                                    <div className="text-2xl font-bold text-red-600">{counts.absent}</div>
+                                    <div className="text-sm text-gray-600">Absent</div>
+                                </div>
+                                <div className="w-px h-12 bg-gray-200" />
+                                <div className="text-center">
+                                    <div className="text-2xl font-bold text-blue-600">{students.length}</div>
+                                    <div className="text-sm text-gray-600">Total</div>
+                                </div>
+                            </div>
+
+                            <button
+                                onClick={submitToReview}
+                                disabled={submitting}
+                                className="px-8 py-3 rounded-xl bg-blue-600 text-white font-semibold text-lg hover:bg-blue-700 disabled:opacity-60 transition-colors shadow-lg hover:shadow-xl"
+                            >
+                                {submitting ? (
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                        Submitting...
+                                    </div>
+                                ) : (
+                                    "Submit Attendance"
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Mobile Layout - Unchanged */}
+            <div className="max-w-md mx-auto pb-10 lg:hidden">
                 <div className="rounded-3xl border border-gray-200 bg-white p-4 sm:p-5 shadow-md">
                     {/* header row: crest + title + date */}
                     <div className="flex items-center justify-between mb-3">
@@ -234,7 +349,8 @@ export default function AttendancePage() {
                 <div className="h-28" />
             </div>
 
-            <div className="fixed inset-x-0 bottom-4 flex justify-center z-50 pointer-events-none">
+            {/* Mobile Fixed Bottom Bar - Unchanged */}
+            <div className="fixed inset-x-0 bottom-4 flex justify-center z-50 pointer-events-none lg:hidden">
                 <div className="w-[92%] max-w-md pointer-events-auto">
                     <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-3">
                         {/* Counts */}
@@ -254,14 +370,14 @@ export default function AttendancePage() {
                         <div className="flex items-center gap-2 w-full sm:w-auto justify-between">
                             <div className="flex gap-2">
                                 <button
-                                    onClick={() => setAttendance((prev) => prev.map((p) => ({ ...p, status: "present" })))}
+                                    onClick={() => setAll("present")}
                                     className="px-3 py-2 rounded-md bg-green-50 text-green-800 text-sm border border-green-100 shadow-sm hover:bg-green-100 transition"
                                 >
                                     All Present
                                 </button>
 
                                 <button
-                                    onClick={() => setAttendance((prev) => prev.map((p) => ({ ...p, status: "absent" })))}
+                                    onClick={() => setAll("absent")}
                                     className="px-3 py-2 rounded-md bg-red-50 text-red-800 text-sm border border-red-100 shadow-sm hover:bg-red-100 transition"
                                 >
                                     All Absent
