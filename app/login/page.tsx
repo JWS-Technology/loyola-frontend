@@ -1,8 +1,8 @@
-// app/(or pages)/login/page.tsx or src/components/LoginPage.tsx
 "use client";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import axios from "axios";
 
 export default function LoginPage() {
@@ -21,14 +21,11 @@ export default function LoginPage() {
             const res = await axios.post(
                 `${process.env.NEXT_PUBLIC_API_URL}/auth/login`,
                 { username, password },
-                {
-                    withCredentials: true, // important: accept httpOnly cookie
-                }
+                { withCredentials: true }
             );
 
             const { role } = res.data;
 
-            // don't store user in localStorage - server issued cookie
             if (role === "student") router.push("/student/dashboard");
             else if (role === "staff") router.push("/staff/dashboard");
             else router.push("/");
@@ -47,35 +44,88 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="flex items-center justify-center min-h-screen bg-gray-100">
-            <form onSubmit={handleLogin} className="bg-white p-8 rounded-2xl shadow-lg w-96 space-y-4">
-                <h1 className="text-2xl font-bold text-center">Loyola ERP Login</h1>
-                <p className="text-sm text-center text-gray-500">Enter your Roll No (Student) or Email (Staff) and password</p>
+        <div className="min-h-screen w-full flex items-center justify-center bg-gradient-to-br from-pink-200 via-purple-200 to-purple-300 px-4 py-10">
 
-                <input
-                    type="text"
-                    placeholder="Roll No or Email"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    required
-                    className="w-full border text-black border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring focus:ring-blue-300"
-                />
+            <div className="flex flex-col md:flex-row items-center gap-10">
 
-                <input
-                    type="password"
-                    placeholder="Password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    className="w-full border text-black border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring focus:ring-blue-300"
-                />
+                {/* LOGIN CARD */}
+                <div className="w-full max-w-sm bg-gradient-to-br from-purple-500 to-purple-700 text-white p-10 rounded-3xl shadow-2xl">
 
-                {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+                    {/* College Name */}
+                    <div className="text-center mb-8">
+                        <h1 className="text-3xl font-bold tracking-wide">
+                            LUCEAT LUX VESTRA
+                        </h1>
+                        <p className="text-sm text-purple-200 mt-1">
+                            ENTERPRISE RESOURCE PLANNING
+                        </p>
+                    </div>
 
-                <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 rounded-lg transition">
-                    {loading ? "Logging in..." : "Login"}
-                </button>
-            </form>
+                    {/* Heading */}
+                    <h2 className="text-center text-xl font-semibold mb-8">
+                        Login your account
+                    </h2>
+
+                    <form onSubmit={handleLogin} className="space-y-6">
+
+                        {/* Username */}
+                        <input
+                            type="text"
+                            placeholder="username"
+                            value={username}
+                            onChange={(e) => setUsername(e.target.value)}
+                            required
+                            className="w-full px-4 py-3 rounded-xl bg-white/20 placeholder-purple-200 text-white focus:ring-2 focus:ring-white outline-none"
+                        />
+
+                        {/* Password */}
+                        <input
+                            type="password"
+                            placeholder="password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            required
+                            className="w-full px-4 py-3 rounded-xl bg-white/20 placeholder-purple-200 text-white focus:ring-2 focus:ring-white outline-none"
+                        />
+
+                        {/* Forgot Password */}
+                        <div className="text-right">
+                            <a className="text-sm text-purple-200 hover:underline cursor-pointer">
+                                forget password?
+                            </a>
+                        </div>
+
+                        {/* Error */}
+                        {error && (
+                            <p className="text-sm text-red-200 bg-red-500/20 rounded-lg p-2 text-center">
+                                {error}
+                            </p>
+                        )}
+
+                        {/* Login Button */}
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="w-full bg-white text-purple-700 font-semibold py-3 rounded-xl shadow-md hover:bg-purple-100 transition disabled:opacity-60"
+                        >
+                            {loading ? "Signing in..." : "Login"}
+                        </button>
+                    </form>
+                </div>
+
+                {/* RIGHT-SIDE LARGE COLLEGE LOGO */}
+                <div className="flex justify-center">
+                    <Image
+                        src="/logo.png"
+                        alt="College Logo"
+                        width={350}
+                        height={350}
+                        className="drop-shadow-2xl"
+                        priority
+                    />
+                </div>
+
+            </div>
         </div>
     );
 }
