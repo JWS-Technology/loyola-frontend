@@ -3,13 +3,14 @@
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import {
-    LogOut,
     Clock,
     ArrowLeft,
     CheckCircle2,
     XCircle,
-    AlertCircle,
-    BookOpen
+    BookOpen,
+    Calendar,
+    TrendingUp,
+    User
 } from "lucide-react";
 import axios from "axios";
 import { useRouter } from "next/navigation";
@@ -18,11 +19,11 @@ import { useRouter } from "next/navigation";
 interface Student {
     _id: string;
     first_name?: string;
+    name?: string;
     roll_no: string;
-    email?: string;
     course: string;
     semester: number;
-    avatar?: string;
+    userId?: string;
 }
 
 interface AttendanceSubject {
@@ -31,55 +32,56 @@ interface AttendanceSubject {
     subjectCode: string;
     totalClasses: number;
     attendedClasses: number;
-    percentage: number;
+    percentage?: number;
 }
 
-// --- Pie Chart Component ---
-const PieChart = ({ percentage, size = 80, strokeWidth = 8, lowAttendance = false }: {
-    percentage: number;
-    size?: number;
-    strokeWidth?: number;
-    lowAttendance?: boolean;
-}) => {
-    const radius = (size - strokeWidth) / 2;
-    const circumference = 2 * Math.PI * radius;
-    const strokeDasharray = circumference;
-    const strokeDashoffset = circumference - (percentage / 100) * circumference;
-
-    const getColor = () => {
-        if (percentage < 75) return lowAttendance ? "#ef4444" : "#dc2626"; // red
-        return "#16a34a"; // green
+interface DailyAttendance {
+    date: string;
+    dayOrder: string;
+    periods: {
+        H1: string;
+        H2: string;
+        H3: string;
+        H4: string;
+        H5: string;
+        H6: string;
+        [key: string]: string;
     };
+}
+
+// --- Chart Components ---
+const AttendanceDonutChart = ({ percentage, size = 100 }: { percentage: number; size?: number }) => {
+    const radius = size / 2 - 5;
+    const circumference = 2 * Math.PI * radius;
+    const strokeDashoffset = circumference - (percentage / 100) * circumference;
+    const color = percentage >= 75 ? "#10b981" : "#ef4444";
 
     return (
         <div className="relative" style={{ width: size, height: size }}>
             <svg width={size} height={size} className="transform -rotate-90">
-                {/* Background circle */}
                 <circle
                     cx={size / 2}
                     cy={size / 2}
                     r={radius}
-                    stroke="#f3f4f6"
-                    strokeWidth={strokeWidth}
+                    stroke="#e5e7eb"
+                    strokeWidth="8"
                     fill="none"
                 />
-                {/* Progress circle */}
                 <circle
                     cx={size / 2}
                     cy={size / 2}
                     r={radius}
-                    stroke={getColor()}
-                    strokeWidth={strokeWidth}
+                    stroke={color}
+                    strokeWidth="8"
                     fill="none"
-                    strokeDasharray={strokeDasharray}
+                    strokeDasharray={circumference}
                     strokeDashoffset={strokeDashoffset}
                     strokeLinecap="round"
                     className="transition-all duration-1000 ease-out"
                 />
             </svg>
-            {/* Percentage text */}
             <div className="absolute inset-0 flex items-center justify-center">
-                <span className={`text-sm font-bold ${percentage < 75 ? 'text-red-600' : 'text-green-600'}`}>
+                <span className={`text-lg font-bold ${percentage >= 75 ? 'text-green-600' : 'text-red-600'}`}>
                     {percentage.toFixed(0)}%
                 </span>
             </div>
@@ -87,101 +89,172 @@ const PieChart = ({ percentage, size = 80, strokeWidth = 8, lowAttendance = fals
     );
 };
 
-// --- Donut Chart for Overall Stats ---
-const DonutChart = ({ attended, total, size = 120, strokeWidth = 12 }: {
-    attended: number;
-    total: number;
-    size?: number;
-    strokeWidth?: number;
-}) => {
-    const percentage = total > 0 ? (attended / total) * 100 : 0;
-    const radius = (size - strokeWidth) / 2;
-    const circumference = 2 * Math.PI * radius;
-    const strokeDasharray = circumference;
-    const strokeDashoffset = circumference - (percentage / 100) * circumference;
-
-    const getColor = () => percentage < 75 ? "#ef4444" : "#16a34a";
-
+const MiniBarChart = ({ data }: { data: { label: string; value: number; total: number }[] }) => {
     return (
-        <div className="relative" style={{ width: size, height: size }}>
-            <svg width={size} height={size} className="transform -rotate-90">
-                {/* Background circle */}
-                <circle
-                    cx={size / 2}
-                    cy={size / 2}
-                    r={radius}
-                    stroke="#e5e7eb"
-                    strokeWidth={strokeWidth}
-                    fill="none"
-                />
-                {/* Progress circle */}
-                <circle
-                    cx={size / 2}
-                    cy={size / 2}
-                    r={radius}
-                    stroke={getColor()}
-                    strokeWidth={strokeWidth}
-                    fill="none"
-                    strokeDasharray={strokeDasharray}
-                    strokeDashoffset={strokeDashoffset}
-                    strokeLinecap="round"
-                    className="transition-all duration-1000 ease-out"
-                />
-            </svg>
-            {/* Center content */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className={`text-lg font-bold ${percentage < 75 ? 'text-red-600' : 'text-green-600'}`}>
-                    {percentage.toFixed(1)}%
-                </span>
-                <span className="text-xs text-gray-500 mt-1">
-                    {attended}/{total}
-                </span>
-            </div>
+        <div className="space-y-2">
+            {data.map((item, index) => {
+                const percentage = item.total > 0 ? (item.value / item.total) * 100 : 0;
+                return (
+                    <div key={index} className="flex items-center gap-3">
+                        <span className="text-xs text-gray-600 w-12 truncate">{item.label}</span>
+                        <div className="flex-1 bg-gray-100 rounded-full h-2">
+                            <div
+                                className={`h-2 rounded-full ${percentage >= 75 ? 'bg-green-500' : 'bg-red-500'}`}
+                                style={{ width: `${percentage}%` }}
+                            />
+                        </div>
+                        <span className="text-xs font-medium text-gray-700 w-8 text-right">
+                            {item.value}/{item.total}
+                        </span>
+                    </div>
+                );
+            })}
         </div>
     );
 };
 
+const StatusDistributionChart = ({ present, absent, late, onDuty }: { present: number; absent: number; late: number; onDuty: number }) => {
+    const total = present + absent + late + onDuty;
+    const data = [
+        { label: "Present", value: present, color: "bg-green-500" },
+        { label: "Absent", value: absent, color: "bg-red-500" },
+        { label: "Late", value: late, color: "bg-yellow-500" },
+        { label: "On Duty", value: onDuty, color: "bg-blue-500" },
+    ].filter(item => item.value > 0);
+
+    return (
+        <div className="space-y-2">
+            {data.map((item, index) => (
+                <div key={index} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <div className={`w-3 h-3 rounded ${item.color}`} />
+                        <span className="text-sm text-gray-700">{item.label}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-900">{item.value}</span>
+                        <span className="text-xs text-gray-500">
+                            ({((item.value / total) * 100).toFixed(0)}%)
+                        </span>
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+};
+
+// ---------- Helpers ----------
+const mapStatusToShort = (status: string | undefined) => {
+    if (!status) return "-";
+    const s = String(status).toLowerCase();
+    if (s === "present" || s === "p") return "P";
+    if (s === "absent" || s === "a") return "A";
+    if (s === "late" || s === "l") return "L";
+    if (s === "on-duty" || s === "onduty" || s === "od") return "O";
+    return "-";
+};
+
+const weekdayToDayOrder = (dateStr: string) => {
+    try {
+        const d = new Date(dateStr);
+        const day = d.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
+        const map: Record<string, string> = {
+            monday: "Day 1", tuesday: "Day 2", wednesday: "Day 3",
+            thursday: "Day 4", friday: "Day 5", saturday: "Day 6", sunday: "Day 7"
+        };
+        return map[day] ?? d.toLocaleDateString("en-US", { weekday: "long" });
+    } catch (e) {
+        return "";
+    }
+};
+
+const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return dateString;
+    return date.toLocaleDateString('en-GB', {
+        day: '2-digit', month: '2-digit', year: 'numeric'
+    });
+};
+
+const getInitials = (name?: string) => {
+    if (!name) return "S";
+    const parts = name.split(" ").filter(Boolean);
+    if (parts.length === 0) return "S";
+    if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+    return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+};
+
+// ---------- Component ----------
 export default function StudentAttendancePage() {
     const [student, setStudent] = useState<Student | null>(null);
     const [attendance, setAttendance] = useState<AttendanceSubject[]>([]);
+    const [dailyAttendance, setDailyAttendance] = useState<DailyAttendance[]>([]);
     const [loading, setLoading] = useState(true);
+    const [activeTab, setActiveTab] = useState<"overview" | "details">("details");
 
-    // Derived stats
     const [overallPercentage, setOverallPercentage] = useState(0);
     const [totalClasses, setTotalClasses] = useState(0);
     const [totalAttended, setTotalAttended] = useState(0);
 
     const router = useRouter();
+    const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
-    // --- 1. Authentication & Data Fetching ---
+    // Calculate status distribution
+    const statusCounts = dailyAttendance.reduce((acc, day) => {
+        Object.values(day.periods).forEach(status => {
+            if (status === 'P') acc.present++;
+            else if (status === 'A') acc.absent++;
+            else if (status === 'L') acc.late++;
+            else if (status === 'O') acc.onDuty++;
+        });
+        return acc;
+    }, { present: 0, absent: 0, late: 0, onDuty: 0 });
+
     useEffect(() => {
         let mounted = true;
 
-        const init = async () => {
+        const fetchData = async () => {
             try {
-                const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-
-                // 1. Fetch User
+                // 1. Fetch User Details (Just for the Header/Profile display)
                 const userRes = await axios.get(`${API}/auth/me`, { withCredentials: true });
 
                 if (!mounted) return;
 
-                if (userRes.status === 200 && userRes.data?.user) {
-                    setStudent(userRes.data.user);
-
-                    // 2. Fetch Attendance
-                    const uid = userRes.data.user._id || userRes.data.user.userId;
-                    if (uid) {
-                        const attRes = await axios.get(`${API}/attendance/student/summary`, { withCredentials: true });
-                        if (attRes.status === 200) {
-                            const attData: AttendanceSubject[] = attRes.data.attendance || [];
-                            setAttendance(attData);
-                            calculateStats(attData);
-                        }
-                    }
+                if (userRes.status === 200 && (userRes.data?.user || userRes.data)) {
+                    setStudent(userRes.data.user || userRes.data);
                 } else {
                     router.push("/login");
+                    return;
                 }
+
+                // 2. Fetch Attendance Summary (No studentId param needed, backend handles it)
+                const attRes = await axios.get(`${API}/attendance/student/summary`, {
+                    withCredentials: true
+                });
+
+                if (mounted && attRes.status === 200) {
+                    const attData: AttendanceSubject[] = attRes.data.attendance || [];
+                    const withPercent = attData.map(s => ({
+                        ...s,
+                        percentage: s.totalClasses > 0 ? (s.attendedClasses / s.totalClasses) * 100 : 0,
+                    }));
+                    setAttendance(withPercent);
+                    calculateStats(withPercent);
+                }
+
+                // 3. Fetch Raw Logs (No studentId param needed)
+                const dailyRes = await axios.get(`${API}/attendance`, {
+                    withCredentials: true,
+                });
+
+                if (mounted && dailyRes.status === 200) {
+                    const rawDocs = Array.isArray(dailyRes.data) ? dailyRes.data : [];
+                    // We need the ID for the helper function, take it from the userRes we just got
+                    const uid = (userRes.data.user || userRes.data)._id || (userRes.data.user || userRes.data).userId;
+
+                    const grouped = buildDailyAttendance(rawDocs, uid);
+                    setDailyAttendance(grouped);
+                }
+
             } catch (err: any) {
                 if (axios.isAxiosError(err) && (err.response?.status === 401 || err.response?.status === 403)) {
                     router.push("/login");
@@ -193,79 +266,119 @@ export default function StudentAttendancePage() {
             }
         };
 
-        init();
+        fetchData();
+
         return () => { mounted = false; };
-    }, [router]);
-
-    // --- 2. Calculate Overall Stats ---
+    }, [router, API]);
     const calculateStats = (data: AttendanceSubject[]) => {
-        if (data.length === 0) return;
-
-        const total = data.reduce((acc, curr) => acc + curr.totalClasses, 0);
-        const attended = data.reduce((acc, curr) => acc + curr.attendedClasses, 0);
-
+        if (!data || data.length === 0) {
+            setTotalClasses(0); setTotalAttended(0); setOverallPercentage(0); return;
+        }
+        const total = data.reduce((acc, curr) => acc + (curr.totalClasses || 0), 0);
+        const attended = data.reduce((acc, curr) => acc + (curr.attendedClasses || 0), 0);
         setTotalClasses(total);
         setTotalAttended(attended);
         setOverallPercentage(total > 0 ? (attended / total) * 100 : 0);
     };
 
-    // --- Utilities ---
-    const getInitials = (name?: string) => {
-        if (!name) return "S";
-        const parts = name.split(" ").filter(Boolean);
-        if (parts.length === 0) return "S";
-        if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
-        return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+    const buildDailyAttendance = (attendanceDocs: any[], studentId: string): DailyAttendance[] => {
+        const map: Record<string, DailyAttendance> = {};
+
+        attendanceDocs.forEach(doc => {
+            const date = doc.date || doc.createdAt;
+            if (!date) return;
+
+            const dateISO = (new Date(date)).toISOString().split("T")[0];
+
+            if (!map[dateISO]) {
+                map[dateISO] = {
+                    date: dateISO,
+                    dayOrder: weekdayToDayOrder(dateISO),
+                    periods: { H1: "-", H2: "-", H3: "-", H4: "-", H5: "-", H6: "-" }
+                };
+            }
+
+            const periodNum = Number(doc.period);
+            if (!periodNum) return;
+            const periodKey = `H${periodNum}`;
+
+            let recStatus = "-";
+            if (Array.isArray(doc.records)) {
+                const rec = doc.records.find((r: any) => {
+                    return String(r.studentId) === String(studentId) ||
+                        (r.studentId?._id && String(r.studentId._id) === String(studentId));
+                });
+                if (rec) recStatus = mapStatusToShort(rec.status);
+            }
+
+            if (recStatus !== "-") {
+                map[dateISO].periods[periodKey] = recStatus;
+            }
+        });
+
+        return Object.values(map).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     };
 
-    const handleLogout = async () => {
-        try {
-            const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-            await axios.post(`${API}/auth/logout`, {}, { withCredentials: true });
-        } finally {
-            router.push("/login");
+    const getStatusBadge = (status: string) => {
+        switch (status) {
+            case 'P': return <span className="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-medium">P</span>;
+            case 'A': return <span className="bg-red-100 text-red-800 px-2 py-1 rounded text-xs font-medium">A</span>;
+            case 'L': return <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-xs font-medium">L</span>;
+            case 'O': return <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">O</span>;
+            default: return <span className="bg-gray-100 text-gray-400 px-2 py-1 rounded text-xs">-</span>;
         }
     };
 
-    if (loading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50">
-                <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+    if (loading) return (
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50">
+            <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4" />
+                <p className="text-gray-600">Loading your attendance...</p>
             </div>
-        );
-    }
+        </div>
+    );
 
     if (!student) return null;
-    const displayName = student.first_name || "Student";
+
+    const displayName = student.first_name || student.name || "Student";
+    const topSubjects = attendance.slice(0, 4);
 
     return (
-        <div className="min-h-screen bg-gray-50 pb-10">
-            {/* --- Header (Simplified) --- */}
-            <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 pb-10">
+            {/* Header */}
+            <header className="bg-white/80 backdrop-blur-sm border-b border-gray-200 sticky top-0 z-10">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
                             <button
                                 onClick={() => router.back()}
-                                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                                className="p-2 hover:bg-gray-100 rounded-full transition-all duration-200"
                             >
                                 <ArrowLeft className="w-5 h-5 text-gray-600" />
                             </button>
                             <div className="flex items-center gap-3">
-                                <Image src="/logo.png" width={40} height={40} alt="Logo" className="rounded-lg" />
+                                <div className="w-15 h-15 bg-gray-100 rounded-xl flex items-center justify-center shadow-sm">
+                                    <Image
+                                        src="/logo.png"
+                                        width={56}
+                                        height={56}
+                                        alt="Loyola Logo"
+                                        className="rounded-lg object-contain w-13 h-13 sm:w-15 sm:h-15"
+                                        priority
+                                    /></div>
                                 <div>
-                                    <h1 className="text-lg font-bold text-gray-900 leading-none">My Attendance</h1>
-                                    <p className="text-xs text-gray-500 mt-1">{student.course} • Sem {student.semester}</p>
+                                    <h1 className="text-xl font-bold text-gray-900 leading-none">Attendance Dashboard</h1>
+                                    <p className="text-sm text-gray-500 mt-1">{student.course} • Sem {student.semester}</p>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-4">
                             <div className="hidden sm:block text-right">
-                                <p className="text-sm font-medium text-gray-900">{displayName}</p>
-                                <p className="text-xs text-gray-500">{student.roll_no}</p>
+                                <p className="text-sm font-semibold text-gray-900">{displayName}</p>
+                                <p className="text-xs text-gray-500">Roll No: {student.roll_no}</p>
                             </div>
-                            <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-sm">
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm shadow-sm">
                                 {getInitials(displayName)}
                             </div>
                         </div>
@@ -274,162 +387,208 @@ export default function StudentAttendancePage() {
             </header>
 
             <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-
-                {/* --- Overall Stats Cards with Donut Chart --- */}
-                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
-                    {/* Main Overall Attendance Card with Donut Chart */}
-                    <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
-                        <div className="flex flex-col sm:flex-row items-center gap-6">
-                            <DonutChart
-                                attended={totalAttended}
-                                total={totalClasses}
-                                size={120}
-                                strokeWidth={12}
-                            />
-                            <div className="flex-1 text-center sm:text-left">
-                                <h3 className="text-lg font-semibold text-gray-900 mb-2">Overall Attendance</h3>
-                                <div className="flex items-center justify-center sm:justify-start gap-2 mb-3">
-                                    <div className={`text-2xl font-bold ${overallPercentage < 75 ? 'text-red-600' : 'text-green-600'}`}>
-                                        {overallPercentage.toFixed(1)}%
-                                    </div>
-                                    {overallPercentage < 75 && (
-                                        <AlertCircle className="w-5 h-5 text-red-500" title="Low Attendance" />
-                                    )}
-                                </div>
-                                <p className="text-sm text-gray-600 mb-4">
-                                    Attended <span className="font-semibold text-gray-900">{totalAttended}</span> out of <span className="font-semibold text-gray-900">{totalClasses}</span> total sessions
-                                </p>
-                                <div className="flex items-center gap-4 text-xs">
-                                    <div className="flex items-center gap-1">
-                                        <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                                        <span className="text-gray-600">Attended</span>
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                        <div className="w-3 h-3 bg-gray-200 rounded-full"></div>
-                                        <span className="text-gray-600">Missed</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Supporting Stats Cards */}
-                    <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm flex items-center gap-4">
-                        <div className="p-3 rounded-full bg-blue-100 text-blue-600">
-                            <Clock className="w-6 h-6" />
-                        </div>
-                        <div>
-                            <p className="text-sm text-gray-500 font-medium">Total Sessions</p>
-                            <h2 className="text-2xl font-bold text-gray-900">{totalClasses}</h2>
-                        </div>
-                    </div>
-
-                    <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm flex items-center gap-4">
-                        <div className="p-3 rounded-full bg-purple-100 text-purple-600">
-                            <BookOpen className="w-6 h-6" />
-                        </div>
-                        <div>
-                            <p className="text-sm text-gray-500 font-medium">Classes Attended</p>
-                            <h2 className="text-2xl font-bold text-gray-900">{totalAttended}</h2>
-                        </div>
-                    </div>
+                {/* Tab Navigation */}
+                <div className="flex gap-2 mb-8 bg-white/80 rounded-2xl p-2 w-fit border border-gray-200 shadow-sm">
+                    <button
+                        onClick={() => setActiveTab("overview")}
+                        className={`px-6 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${activeTab === "overview"
+                            ? "bg-blue-600 text-white shadow-sm"
+                            : "text-gray-600 hover:text-gray-900"
+                            }`}
+                    >
+                        📊 Overview
+                    </button>
+                    <button
+                        onClick={() => setActiveTab("details")}
+                        className={`px-6 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${activeTab === "details"
+                            ? "bg-blue-600 text-white shadow-sm"
+                            : "text-gray-600 hover:text-gray-900"
+                            }`}
+                    >
+                        📅 Daily Record
+                    </button>
                 </div>
 
-                {/* --- Subject List with Pie Charts --- */}
-                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-                    <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                        <h2 className="font-semibold text-gray-800">Subject Wise Breakdown</h2>
-                        <span className="text-xs text-gray-500 bg-white border border-gray-200 px-2 py-1 rounded">
-                            {attendance.length} Subjects
-                        </span>
-                    </div>
-
-                    {attendance.length > 0 ? (
-                        <div className="divide-y divide-gray-100">
-                            {attendance.map((subject) => (
-                                <div key={subject.subjectId} className="p-6 hover:bg-gray-50 transition-colors">
-                                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-                                        {/* Subject Info and Progress Bar */}
-                                        <div className="flex-1">
-                                            <div className="flex items-center gap-2 mb-3">
-                                                <h3 className="font-semibold text-gray-900 text-base">{subject.subjectName}</h3>
-                                                <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded border border-gray-200">
-                                                    {subject.subjectCode}
-                                                </span>
+                {activeTab === "overview" ? (
+                    /* Overview Tab */
+                    <div className="space-y-8">
+                        {/* Main Stats Cards */}
+                        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                            {/* Overall Attendance Card */}
+                            <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-gray-900 mb-2">Overall Attendance</h3>
+                                        <div className="flex items-center gap-3 mb-4">
+                                            <div className={`text-3xl font-bold ${overallPercentage >= 75 ? 'text-green-600' : 'text-red-600'}`}>
+                                                {overallPercentage.toFixed(1)}%
                                             </div>
-
-                                            {/* Progress Bar */}
-                                            <div className="mb-3">
-                                                <div className="flex justify-between text-sm mb-1">
-                                                    <span className="text-gray-600">Progress</span>
-                                                    <span className={`font-medium ${subject.percentage < 75 ? 'text-red-600' : 'text-green-600'}`}>
-                                                        {subject.percentage.toFixed(1)}%
-                                                    </span>
-                                                </div>
-                                                <div className="relative h-2 w-full bg-gray-100 rounded-full overflow-hidden">
-                                                    <div
-                                                        className={`absolute h-full rounded-full transition-all duration-1000 ease-out ${subject.percentage < 75 ? 'bg-red-500' : 'bg-green-500'
-                                                            }`}
-                                                        style={{ width: `${subject.percentage}%` }}
-                                                    />
-                                                    {/* 75% Marker Line */}
-                                                    <div className="absolute top-0 bottom-0 w-0.5 bg-black/10 z-10" style={{ left: '75%' }} title="75% Requirement" />
-                                                </div>
-                                            </div>
-
-                                            <p className="text-sm text-gray-600">
-                                                Attended <span className="font-medium text-gray-900">{subject.attendedClasses}</span> out of <span className="font-medium text-gray-900">{subject.totalClasses}</span> classes
-                                            </p>
-                                        </div>
-
-                                        {/* Pie Chart */}
-                                        <div className="flex flex-col items-center gap-2">
-                                            <PieChart
-                                                percentage={subject.percentage}
-                                                size={70}
-                                                strokeWidth={6}
-                                                lowAttendance={subject.percentage < 75}
-                                            />
-                                            {subject.percentage < 75 && (
-                                                <span className="text-xs text-red-600 font-medium flex items-center gap-1">
-                                                    <AlertCircle className="w-3 h-3" />
-                                                    Below 75%
-                                                </span>
+                                            {overallPercentage >= 75 ? (
+                                                <CheckCircle2 className="w-6 h-6 text-green-500" />
+                                            ) : (
+                                                <XCircle className="w-6 h-6 text-red-500" />
                                             )}
                                         </div>
+                                        <p className="text-sm text-gray-600">
+                                            {totalAttended} of {totalClasses} classes attended
+                                        </p>
+                                    </div>
+                                    <AttendanceDonutChart percentage={overallPercentage} size={100} />
+                                </div>
+                            </div>
+
+                            {/* Supporting Stats */}
+                            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+                                <div className="flex items-center gap-4">
+                                    <div className="p-3 rounded-xl bg-blue-100 text-blue-600">
+                                        <Clock className="w-6 h-6" />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-gray-500 font-medium">Total Sessions</p>
+                                        <h2 className="text-2xl font-bold text-gray-900">{totalClasses}</h2>
                                     </div>
                                 </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="p-12 text-center">
-                            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                <XCircle className="w-8 h-8 text-gray-400" />
                             </div>
-                            <h3 className="text-gray-900 font-medium">No Attendance Records</h3>
-                            <p className="text-gray-500 text-sm mt-1">Attendance data hasn't been uploaded for this semester yet.</p>
-                        </div>
-                    )}
-                </div>
 
-                {/* --- Attendance Status Legend --- */}
-                <div className="mt-6 bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
-                    <h4 className="text-sm font-semibold text-gray-900 mb-3">Attendance Status</h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-                        <div className="flex items-center gap-2">
-                            <div className="w-4 h-4 bg-green-500 rounded-full"></div>
-                            <span className="text-gray-600">Good (75% and above)</span>
+                            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+                                <div className="flex items-center gap-4">
+                                    <div className="p-3 rounded-xl bg-purple-100 text-purple-600">
+                                        <BookOpen className="w-6 h-6" />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-gray-500 font-medium">Classes Attended</p>
+                                        <h2 className="text-2xl font-bold text-gray-900">{totalAttended}</h2>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <div className="w-4 h-4 bg-red-500 rounded-full"></div>
-                            <span className="text-gray-600">Needs Improvement (Below 75%)</span>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            {/* Status Distribution */}
+                            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+                                <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                                    <TrendingUp className="w-5 h-5 text-blue-600" />
+                                    Status Distribution
+                                </h3>
+                                <StatusDistributionChart {...statusCounts} />
+                            </div>
+
+                            {/* Top Subjects */}
+                            <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+                                <h3 className="font-semibold text-gray-900 mb-4">Subject Performance</h3>
+                                {topSubjects.length > 0 ? (
+                                    <MiniBarChart
+                                        data={topSubjects.map(subject => ({
+                                            label: subject.subjectCode,
+                                            value: subject.attendedClasses,
+                                            total: subject.totalClasses
+                                        }))}
+                                    />
+                                ) : (
+                                    <p className="text-gray-500 text-sm">No subject data available</p>
+                                )}
+                            </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <div className="w-4 h-4 border-2 border-gray-300 rounded-full"></div>
-                            <span className="text-gray-600">75% Requirement Mark</span>
+
+                        {/* Quick Stats */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl p-4 text-white">
+                                <div className="text-2xl font-bold">{statusCounts.present}</div>
+                                <div className="text-sm opacity-90">Present</div>
+                            </div>
+                            <div className="bg-gradient-to-br from-red-500 to-pink-600 rounded-2xl p-4 text-white">
+                                <div className="text-2xl font-bold">{statusCounts.absent}</div>
+                                <div className="text-sm opacity-90">Absent</div>
+                            </div>
+                            <div className="bg-gradient-to-br from-yellow-500 to-orange-600 rounded-2xl p-4 text-white">
+                                <div className="text-2xl font-bold">{statusCounts.late}</div>
+                                <div className="text-sm opacity-90">Late</div>
+                            </div>
+                            <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl p-4 text-white">
+                                <div className="text-2xl font-bold">{statusCounts.onDuty}</div>
+                                <div className="text-sm opacity-90">On Duty</div>
+                            </div>
                         </div>
                     </div>
-                </div>
+                ) : (
+                    /* Details Tab */
+                    <div className="space-y-6">
+                        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                                <div className="flex items-center gap-2">
+                                    <Calendar className="w-5 h-5 text-gray-600" />
+                                    <h2 className="font-semibold text-gray-800">Daily Attendance Record</h2>
+                                </div>
+                                <span className="text-xs text-gray-500 bg-white border border-gray-200 px-2 py-1 rounded">
+                                    {dailyAttendance.length} Days
+                                </span>
+                            </div>
+
+                            {dailyAttendance.length > 0 ? (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full">
+                                        <thead>
+                                            <tr className="bg-gray-50 border-b border-gray-200">
+                                                <th className="text-left p-4 text-sm font-semibold text-gray-700">Date</th>
+                                                <th className="text-left p-4 text-sm font-semibold text-gray-700">Day</th>
+                                                {['H1', 'H2', 'H3', 'H4', 'H5', 'H6'].map(h => (
+                                                    <th key={h} className="text-center p-4 text-sm font-semibold text-gray-700">{h}</th>
+                                                ))}
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100">
+                                            {dailyAttendance.map((day, index) => (
+                                                <tr key={index} className="hover:bg-gray-50 transition-colors">
+                                                    <td className="p-4 text-sm text-gray-900 font-medium">{formatDate(day.date)}</td>
+                                                    <td className="p-4">
+                                                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                                            {day.dayOrder}
+                                                        </span>
+                                                    </td>
+                                                    {['H1', 'H2', 'H3', 'H4', 'H5', 'H6'].map(h => (
+                                                        <td key={h} className="p-4 text-center">
+                                                            {getStatusBadge(day.periods[h])}
+                                                        </td>
+                                                    ))}
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ) : (
+                                <div className="p-12 text-center">
+                                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <XCircle className="w-8 h-8 text-gray-400" />
+                                    </div>
+                                    <h3 className="text-gray-900 font-medium">No Attendance Records</h3>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Legend */}
+                        <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
+                            <h4 className="font-semibold text-gray-900 mb-4">Attendance Legend</h4>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                <div className="flex items-center gap-3">
+                                    <span className="bg-green-100 text-green-800 px-3 py-1 rounded-lg text-sm font-medium">P</span>
+                                    <span className="text-gray-700">Present</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <span className="bg-red-100 text-red-800 px-3 py-1 rounded-lg text-sm font-medium">A</span>
+                                    <span className="text-gray-700">Absent</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <span className="bg-yellow-100 text-yellow-800 px-3 py-1 rounded-lg text-sm font-medium">L</span>
+                                    <span className="text-gray-700">Late</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-lg text-sm font-medium">O</span>
+                                    <span className="text-gray-700">On Duty</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </main>
         </div>
     );
