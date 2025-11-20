@@ -125,7 +125,7 @@ export default function StaffDashboard() {
             title: "View Timetable",
             icon: "📅",
             description: "Check your schedule",
-            href: "/timetable",
+            href: "/staff/timetable",
             color: "bg-green-50 border-green-200 hover:bg-green-100",
         },
     ];
